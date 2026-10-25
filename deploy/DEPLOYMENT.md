@@ -2,6 +2,11 @@
 
 Application: https://campuspickleball.us
 
+Current release: `/srv/campus-pickleball/releases/20261025-03-home`. See
+[HOMEPAGE.md](HOMEPAGE.md) for the homepage release, verification results, and
+remaining browser checks. The initial deployment record below is retained as
+history; `20261025-01` is now the rollback release.
+
 www redirects to the canonical domain. HTTP redirects to HTTPS. DNS remains
 managed manually in Porkbun; no nameserver changes were made.
 
@@ -10,7 +15,7 @@ managed manually in Porkbun; no nameserver changes were made.
 - Vultr public IPv4: 107.191.36.86
 - SSH: `ssh -i ~/.ssh/id_ed25519 linuxuser@107.191.36.86`
 - Ubuntu 26.04.1 LTS; Node 24.22.1; npm 11.19.1; Caddy 2.11.7
-- Active release: /srv/campus-pickleball/releases/20261025-01
+- Initial release: /srv/campus-pickleball/releases/20261025-01
 - Base repository commit: 8444edc, plus this task's deployment tooling and test fix
 - Application service user: campus-pickleball (no interactive login)
 - Runtime secrets: /etc/campus-pickleball/production.env, root:campus-pickleball 0640
@@ -19,7 +24,7 @@ managed manually in Porkbun; no nameserver changes were made.
 - Source recovery artifact: /srv/campus-pickleball/artifacts/20261025-01-source.tar.gz
 - Artifact checksum: /srv/campus-pickleball/artifacts/20261025-01-source.sha256
 
-This is the first production release, so no prior production release exists.
+This was the first production release, so it had no prior production release.
 Retain this release and its source artifact. Subsequent release.sh deployments
 retain the last successful release in `previous` for the rollback procedure in
 README.md. Database migrations are not part of automated deployment.

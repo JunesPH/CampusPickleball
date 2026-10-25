@@ -16,7 +16,8 @@
     "test:profiles:db": "RUN_PROFILE_DB_TESTS=1 node --conditions=react-server --test tests/profiles.integration.test.mjs",
     "test:games": "node --conditions=react-server --test tests/games.test.mjs tests/game-membership.test.mjs tests/game-cancellation.test.mjs",
     "test:games:db": "RUN_GAME_DB_TESTS=1 node --conditions=react-server --test tests/games.integration.test.mjs tests/game-membership.integration.test.mjs tests/game-cancellation.integration.test.mjs",
-    "test:games:ui": "node --test --test-timeout=15000 tests/game-ui.test.mjs"
+    "test:games:ui": "node --test --test-timeout=15000 tests/game-ui.test.mjs",
+    "test:home": "node --test --test-timeout=15000 tests/home.test.mjs"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.33.0",

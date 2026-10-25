@@ -2,10 +2,11 @@
 
 Status: deployed at https://campuspickleball.us on Vultr 107.191.36.86,
 Ubuntu 26.04.1 LTS. SSH uses linuxuser and the owner's ~/.ssh/id_ed25519 key.
-The active release is /srv/campus-pickleball/releases/20261025-01, based on
-repository revision 8444edc plus deployment files and the corrected integration
-assertion. Node 24.22.1 and Caddy 2.11.7 are installed. See DEPLOYMENT.md for live
-verification and remaining manual checks. Inspect existing services before
+The active release is /srv/campus-pickleball/releases/20261025-03-home, based on
+repository revision 0040980 plus the homepage update. The previous release,
+20261025-01, is retained for rollback. Node 24.22.1 and Caddy 2.11.7 are installed.
+See HOMEPAGE.md for current verification and remaining browser checks, and
+DEPLOYMENT.md for the initial server handoff. Inspect existing services before
 adapting these procedures to another instance.
 
 Local preparation verified October 25, 2026: production build and lint passed;
@@ -106,8 +107,14 @@ Create a unique release directory under /srv/campus-pickleball/releases. Transfe
 only reviewed source: src/, public/ if present, scripts/, tests/, db/, deploy/,
 package.json, package-lock.json, next.config.ts, next-env.d.ts if generated,
 tsconfig.json, postcss.config.mjs, eslint.config.mjs, and .env.example. Never
-transfer .git, .env.local, .next, node_modules, or private keys. Set ownership to
-campus-pickleball. Run the release script as that user, using an absolute path:
+transfer .git, .env.local, .next, node_modules, or private keys.
+
+When archiving on macOS, use `COPYFILE_DISABLE=1 tar --no-xattrs --no-acls
+--no-fflags` to exclude Apple metadata. Inspect the archive for `._*` files before
+uploading; Linux lint treats these metadata files as invalid source files.
+
+Set ownership to campus-pickleball. Run the release script as that user, using
+an absolute path:
 
 ```sh
 sudo -u campus-pickleball bash /srv/campus-pickleball/releases/RELEASE_ID/deploy/release.sh /srv/campus-pickleball/releases/RELEASE_ID

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { JSDOM } from 'jsdom';
 
 // Anonymous requests only. Never print auth redirect URLs or cookie values.
 const base = new URL(process.env.SMOKE_BASE_URL || 'http://127.0.0.1:3100');
@@ -10,8 +11,16 @@ async function request(path, init = {}) {
 }
 const home = await request('/');
 assert.equal(home.status, 200);
-assert.doesNotMatch(await home.text(), /Sign-in is being set up/);
-console.log('Homepage: configured, HTTP 200');
+const homeHtml = await home.text();
+assert.doesNotMatch(homeHtml, /Sign-in is being set up/);
+assert.match(home.headers.get('cache-control'), /private.*no-store/);
+const homeDocument = new JSDOM(homeHtml).window.document;
+assert.match(homeDocument.querySelector('h1').textContent, /Your next rally/);
+assert.equal(homeDocument.querySelector('header > a').getAttribute('href'), '/');
+for (const href of ['/games', '/auth/login']) assert.ok(homeDocument.querySelector(`main a[href="${href}"]`));
+assert.equal(homeDocument.querySelector('main a[href="/games/new"]'), null);
+assert.match(homeDocument.querySelector('main').textContent, /self-reported skill level/);
+console.log('Homepage: overview, anonymous CTAs, home brand link, private/no-store, HTTP 200');
 for (const method of ['GET', 'PUT']) {
   const response = await request('/api/me', { method, ...(method === 'PUT' ? {
     headers: { Origin: base.origin, 'Content-Type': 'application/json' }, body: '{}',
