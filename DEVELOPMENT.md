@@ -370,3 +370,99 @@ then leave and confirm the spot reopens. Try another account while full, an
 ineligible rating, overlapping game times, and a started/cancelled game. Verify
 the host cannot leave, filter URLs survive refresh, and **Clear filters** resets
 the visible controls. Check the flow at phone width and with keyboard navigation.
+
+
+## My Games and host cancellation
+
+`/my-games` requires a completed profile and lists future games hosted or joined
+by the current session's player, ordered by start time with 20 results per page.
+Hosting and joined roles are labeled, and cancelled games remain visible until
+their scheduled start. Participants may still leave a cancelled game, as with the
+existing membership convention; leaving removes it from their My Games list.
+
+Hosts can cancel from game details using a confirmation dialog.
+`POST /api/games/:id/cancel` accepts no body, requires same-origin requests and
+an authenticated profile, and derives the actor only from the Auth0 session.
+The transaction locks the actor profile then the session, checks ownership and
+the fresh database clock, and updates the existing status column. Cancellation
+is idempotent, cannot be undone, and is closed after the game starts. Rosters are
+retained so participants can see cancellations. Discovery and overlap checks
+already consider only scheduled games; cancelled games reject all new joins.
+No migration or new service is required. Cancellation does not send email or
+push notifications; its confirmation explicitly describes visibility in My Games.
+
+Phone layout changes reduce outer/card padding, wrap navigation, give navigation
+and buttons at least 44px height, constrain form controls, prevent fieldset
+intrinsic overflow, and wrap long names/addresses. Profile and My Games loading
+boundaries and a game-not-found page complement existing game loading/error
+boundaries. Creation shows a success message on the resulting detail page and
+stays disabled while navigating; membership and cancellation show request,
+success, and actionable failure feedback.
+
+Verification for this change (October 24, 2026):
+
+- `npm run lint`, `npm run build`, and all 31 offline database/profile/game tests
+  passed. Build emits the existing Auth0 `dpopUtils.js` dynamic dependency warning.
+- `npm run test:games:db`: all 10 tests passed against the configured PostgreSQL
+  service. This includes the full two-player lifecycle with disposable profile
+  subjects, cancellation authorization, retained rosters, released schedule
+  conflicts, rejected post-cancellation joins, and a join/cancel race. Fixtures
+  were cleaned up. These are database identities, not real Auth0 logins.
+- `SMOKE_BASE_URL=http://localhost:3000 node tests/games-anonymous.smoke.mjs`
+  passed against the local server: public discovery/filter pages render,
+  protected creation/My Games redirect, anonymous cancellation/membership/create
+  requests return private 401 responses, and missing games return not-found UI.
+- The session's browser inventory was empty (in-app browser unavailable).
+  Consequently real Auth0 sign-in with two accounts, confirmation-dialog
+  interaction, and visual checks at phone viewport sizes were not performed.
+  Complete those checks in a connected browser before considering browser QA done.
+
+### Cancellation audit follow-up
+
+The audit inspected the implementation and added regressions for the following
+UI defects, which are now fixed:
+
+- Reopening the confirmation clears a previous request's error.
+- Cancelled/started games offer nonmembers “Find another game” instead of an
+  invitation to sign in/join or a misleading full-game message.
+- A cancelled game no longer shows the creation-success banner from `?created=1`.
+- Cancellation success requires the response's status to be `cancelled`.
+  Unexpected payloads and lost/malformed responses show an error and refresh
+  the persisted game state instead of claiming success.
+
+Audit verification:
+
+- Lint and production build passed (the existing Auth0 dynamic dependency
+  warning remains). All 31 existing offline database/profile/game tests passed.
+- `npm run test:games:ui`: nine tests passed using real React components in
+  jsdom. Coverage includes Keep game sending no write, rapid double-clicks
+  issuing one request, disabled pending controls, Escape prevention while
+  pending, expired-session sign-in links, 403/404/409/503 responses, network and
+  malformed-response failures, cancelled detail rendering for both injected
+  identities, roles/pagination/empty states, and retryable data errors.
+  jsdom is a development-only dependency. Its modal open/close methods are
+  shimmed; these tests do not verify native focus trapping or visual layout.
+- `npm run test:games:db`: 17 tests passed, including the new cancellation audit.
+  A separate SQL connection observed `scheduled` before cancellation and
+  `cancelled` after the API handler returned. The roster was unchanged; both
+  players' subsequent detail/My Games reads returned cancelled; later join
+  handlers returned 409; discovery omitted the game; both players could create
+  and join games at the released time. An unrelated fixture remained unchanged.
+- The database audit also passed concurrent duplicate cancellations, three
+  leave/cancel races, a forced SQL failure after UPDATE with rollback, a real
+  lock wait crossing the start time, unauthorized/CSRF/forged-body requests,
+  and 24-game pagination excluding past/unrelated games. All 37 audit games
+  and four profiles were removed by exact IDs, with zero remaining IDs checked.
+- Run with a local server for real anonymous HTTP reload verification:
+  `AUDIT_HTTP_BASE_URL=http://localhost:3000 RUN_GAME_DB_TESTS=1 node --conditions=react-server --test tests/game-cancellation.integration.test.mjs`.
+  These HTTP checks verify the actual cancelled detail page and retained roster
+  on repeated requests, and absence from discovery. The separate anonymous
+  HTTP smoke script also verifies sign-in redirects and private 401 writes.
+
+The API-handler tests inject session subjects into the test process and use the
+real database; they do not bypass authentication in the application. Page
+component tests inject data/auth dependencies. No connected browser was available
+in this session. Real Auth0 login with two accounts, native modal keyboard/focus
+behavior, back/forward navigation cache behavior, and phone visual/overflow checks
+at 320px, 375px, and 390px remain unverified. Existing responsive CSS was inspected,
+including the generated dialog width calculation; this is not visual browser QA.

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import nextEnv from '@next/env';
 import { getPool } from '../src/lib/db.mjs';
 import { saveProfile, listUniversities } from '../src/lib/profiles.mjs';
-import { changeMembership, createGame, findGame, listCourts, listGames, parseGameFilters } from '../src/lib/games.mjs';
+import { cancelGame, listMyGames, changeMembership, createGame, findGame, listCourts, listGames, parseGameFilters } from '../src/lib/games.mjs';
 
 test('PostgreSQL discovery and membership rules, including real concurrent joins', { skip: process.env.RUN_GAME_DB_TESTS !== '1' }, async (t) => {
   nextEnv.loadEnvConfig(process.cwd(), true, { info() {}, error() {} });
@@ -27,6 +27,45 @@ test('PostgreSQL discovery and membership rules, including real concurrent joins
       return createGame(owner.subject, { court_id: courts[0].id, local_time: `2099-08-${String(day++).padStart(2, '0')}T23:30`, duration_minutes: 60, format: 'singles', skill_min: 2, skill_max: 4, ...overrides });
     }
     const count = async (id) => (await findGame(id)).participants.length;
+
+    await t.test('two-player core flow: create, discover, join, My Games, leave/rejoin and host cancellation', async () => {
+      const { id } = await game();
+      const mine = async (player) => (await listMyGames(player.id)).games.find((g) => g.id === id);
+      assert.equal((await mine(host)).host_id, host.id);
+      assert.equal(await mine(a), undefined);
+      assert.equal(await mine(b), undefined);
+      const discovery = await listGames(parseGameFilters({ date: '2099-08-01', court: courts[0].id }), a.id);
+      assert.ok(discovery.games.some((g) => g.id === id && !g.joined));
+      await changeMembership(a.subject, id, true);
+      assert.equal((await mine(a)).status, 'scheduled');
+      assert.equal((await mine(a)).member_count, 2);
+      await assert.rejects(cancelGame(a.subject, id), (error) => error.status === 403);
+      assert.equal((await findGame(id)).status, 'scheduled');
+      await changeMembership(a.subject, id, false);
+      assert.equal(await mine(a), undefined);
+      await changeMembership(a.subject, id, true);
+      await cancelGame(host.subject, id);
+      await cancelGame(host.subject, id); // Retrying the operation is safe.
+      assert.equal((await mine(host)).status, 'cancelled');
+      assert.equal((await mine(a)).status, 'cancelled');
+      assert.equal((await findGame(id)).participants.length, 2);
+      await assert.rejects(changeMembership(a.subject, id, true), /cancelled/);
+      await assert.rejects(changeMembership(b.subject, id, true), /cancelled/);
+      await assert.rejects(cancelGame(a.subject, id), (error) => error.status === 403);
+      assert.ok(!(await listGames(parseGameFilters({ date: '2099-08-01', court: courts[0].id }), host.id)).games.some((g) => g.id === id));
+      // Cancellation releases both players' overlapping commitments.
+      await game({ local_time: '2099-08-01T23:30' });
+      await game({ local_time: '2099-08-01T23:30' }, a);
+    });
+
+    await t.test('join racing cancellation leaves a cancelled game and never accepts later joins', async () => {
+      const { id } = await game();
+      const results = await Promise.allSettled([cancelGame(host.subject, id), changeMembership(a.subject, id, true)]);
+      assert.equal(results[0].status, 'fulfilled');
+      if (results[1].status === 'rejected') assert.match(results[1].reason.message, /cancelled/);
+      assert.equal((await findGame(id)).status, 'cancelled');
+      await assert.rejects(changeMembership(b.subject, id, true), /cancelled/);
+    });
 
     await t.test('only one simultaneous request wins the last singles spot; retry stays unique; leave reopens it', async () => {
       const { id } = await game();
@@ -73,6 +112,7 @@ test('PostgreSQL discovery and membership rules, including real concurrent joins
       await assert.rejects(changeMembership(a.subject, id, true), /started/);
       await assert.rejects(changeMembership(a.subject, id, false), /started/);
       assert.equal(await count(id), 1);
+      assert.ok(!(await listMyGames(host.id)).games.some((g) => g.id === id));
     });
 
     await t.test('one player cannot concurrently join overlapping games or host an overlapping commitment', async () => {

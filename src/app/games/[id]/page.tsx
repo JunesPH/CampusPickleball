@@ -9,17 +9,20 @@ import { skillLabel } from '@/lib/skill-levels.mjs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export default async function GamePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function GamePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const subject = await getSubject();
   const profile = subject ? await findProfile(subject) : null;
   const game = await findGame((await params).id);
   if (!game) notFound();
   const formatTime = (date: Date) => new Intl.DateTimeFormat('en-US', { timeZone: game.timezone, dateStyle: 'full', timeStyle: 'long' }).format(date);
   const joined = game.participants.some((player: { id: string }) => player.id === profile?.id);
+  const created = (await searchParams).created === '1' && game.host_id === profile?.id && game.status === 'scheduled';
   const capacity = game.format === 'singles' ? 2 : 4;
   return <PageShell signedIn={Boolean(subject)}>
     <Link href="/games" className="mb-5 inline-block text-sm text-lime-300 underline">Back to games</Link>
     <p className="mb-4 text-sm font-semibold text-lime-300">Game details</p>
+    {created && <p role="status" className="mb-4 rounded-xl border border-lime-300/50 p-4 text-lime-300">Game created. You’re hosting and your spot is saved. Find it in <Link href="/my-games" className="underline">My Games</Link>.</p>}
+    {game.status === 'cancelled' && <p role="status" className="mb-4 rounded-xl border border-amber-300/50 p-4 text-amber-200">Cancelled by the host. This game will not take place. Your time is free for other games.</p>}
     <h1 className="text-3xl font-bold">{game.court_name}</h1>
     <p className="mt-3 text-slate-300">{game.address}</p>
     <dl className="mt-8 space-y-4">
@@ -28,7 +31,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
       <div><dt className="text-slate-400">Accepted skill levels</dt><dd>{skillLabel(game.skill_min)} through {skillLabel(game.skill_max)}</dd></div>
       <div><dt className="text-slate-400">Host</dt><dd>{game.host_name}</dd></div>
     </dl>
-    <p className="mt-5 font-medium">{Math.max(0, capacity - game.participants.length)} spots available · {game.status === 'cancelled' ? 'Cancelled' : game.starts_at <= new Date() ? 'Started' : 'Scheduled'}</p>
+    <p className="mt-5 font-medium">{game.status === 'scheduled' ? `${Math.max(0, capacity - game.participants.length)} spots available · ` : ''}{game.status === 'cancelled' ? 'Cancelled' : game.starts_at <= new Date() ? 'Started' : 'Scheduled'}</p>
     <GameMembership id={game.id} signedIn={Boolean(subject)} hasProfile={Boolean(profile)} joined={joined} host={game.host_id === profile?.id} full={game.participants.length >= capacity} eligible={Boolean(profile && profile.skill_level >= game.skill_min && profile.skill_level <= game.skill_max)} started={game.starts_at <= new Date()} cancelled={game.status === 'cancelled'} />
     <h2 className="mt-8 text-xl font-semibold">Participants ({game.participants.length}/{game.format === 'singles' ? 2 : 4})</h2>
     <ul className="mt-3 space-y-2">{game.participants.map((player: { id: string; display_name: string }) => <li key={player.id}>{player.display_name}{player.id === game.host_id ? ' · Host' : ''}</li>)}</ul>

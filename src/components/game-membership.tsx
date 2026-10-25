@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRef, useState, useTransition } from 'react';
+import GameCancellation from './game-cancellation';
 import { useRouter } from 'next/navigation';
 
 export default function GameMembership({ id, signedIn, hasProfile, joined, host, full, eligible, started, cancelled }: {
@@ -37,7 +38,8 @@ export default function GameMembership({ id, signedIn, hasProfile, joined, host,
   return <section aria-label="Your game membership" aria-busy={busy} className="mt-8 rounded-2xl border border-slate-600 p-5">
     <h2 className="text-lg font-semibold">{host ? 'You’re hosting this game' : joined ? 'You’re on the roster' : 'Play with this group'}</h2>
     {cancelled ? <p className="mt-2 text-amber-200">This game has been cancelled. Joining is closed.</p> : started ? <p className="mt-2 text-slate-300">This game has started. Joining and leaving are closed.</p> : null}
-    {host ? <p className="mt-2 text-sm text-slate-300">The host occupies one spot and cannot leave. Host cancellation is not available yet.</p>
+    {host ? <div><p className="mt-2 text-sm text-slate-300">{cancelled ? "The roster is kept as a record of this cancelled game." : "The host occupies one spot. You can cancel before the game starts."}</p>{!cancelled && !started && <GameCancellation id={id} />}</div>
+      : (cancelled || started) && !joined ? <Link href="/games" className="mt-4 inline-block rounded-xl border border-slate-600 px-5 py-3 text-lime-300">Find another game</Link>
       : !signedIn ? <Link href="/auth/login" className={buttonClass}>Sign in to join</Link>
       : !hasProfile ? <Link href="/profile/setup" className={buttonClass}>Complete your profile</Link>
       : joined ? <button type="button" onClick={update} disabled={busy || started} className={buttonClass}>{busy ? 'Updating…' : 'Leave game'}</button>

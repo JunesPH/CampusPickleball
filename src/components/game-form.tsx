@@ -9,6 +9,7 @@ export default function GameForm({ courts, skillLevel }: { courts: Court[]; skil
   const router = useRouter();
   const pending = useRef(false);
   const [saving, setSaving] = useState(false);
+  const [created, setCreated] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState(0);
   const [courtId, setCourtId] = useState(courts[0]?.id ?? '');
@@ -27,16 +28,19 @@ export default function GameForm({ courts, skillLevel }: { courts: Court[]; skil
     const fields = new FormData(event.currentTarget);
     pending.current = true;
     setSaving(true); setError(''); setStatus(0);
+    let completed = false;
     try {
       const response = await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', cache: 'no-store', body: JSON.stringify({
         court_id: fields.get('court_id'), local_time: fields.get('local_time'), duration_minutes: Number(fields.get('duration_minutes')), format: fields.get('format'), skill_min: Number(fields.get('skill_min')), skill_max: Number(fields.get('skill_max')),
       }) });
       const result = await response.json();
       if (!response.ok) { setStatus(response.status); setError(result.error || 'Could not create the game. Please try again.'); return; }
-      router.push(`/games/${result.id}`);
+      completed = true;
+      setCreated(true);
+      router.push(`/games/${result.id}?created=1`);
       router.refresh();
     } catch { setError('Could not reach the server. Your entries are still here; please try again.'); }
-    finally { pending.current = false; setSaving(false); }
+    finally { if (!completed) { pending.current = false; setSaving(false); } }
   }
   return <form onSubmit={submit} className="mt-8 space-y-6" aria-busy={saving}>
     <fieldset disabled={saving} className="space-y-6 disabled:opacity-70">
@@ -51,7 +55,7 @@ export default function GameForm({ courts, skillLevel }: { courts: Court[]; skil
     {error && <div role="alert" className="rounded-xl border border-red-400/50 p-4 text-red-200"><p>{error}</p>{status === 401 && <a href="/auth/login" className="underline">Sign in again</a>}{status === 403 && <a href="/profile" className="underline">Review your profile</a>}</div>}
     {!courts.length && <p role="alert">No courts are available yet. Please try again later.</p>}
     <p className="text-sm text-slate-400">Creating a game does not reserve a court. Confirm venue access independently.</p>
-    <p role="status" className="text-lime-300">{saving ? 'Creating your game…' : ''}</p>
+    <p role="status" className="text-lime-300">{created ? 'Game created. Opening your game…' : saving ? 'Creating your game…' : ''}</p>
     <button disabled={saving || !courts.length} className="w-full rounded-xl bg-lime-300 px-6 py-3 font-semibold text-slate-950 disabled:opacity-60">{saving ? 'Creating…' : 'Create game'}</button>
   </form>;
 }

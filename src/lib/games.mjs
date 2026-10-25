@@ -108,7 +108,7 @@ export async function changeMembership(subject, id, joining, db = getPool()) {
     // waited past the start time. Transaction-start now() would be stale.
     const { now } = (await client.query('SELECT clock_timestamp() AS now')).rows[0];
     if (game.starts_at <= now) throw new GameMembershipError('This game has started. Joining and leaving are closed.');
-    if (!joining && game.host_id === profile.id) throw new GameMembershipError('Hosts cannot leave their own game. Host cancellation is not available yet.', 403);
+    if (!joining && game.host_id === profile.id) throw new GameMembershipError('Hosts cannot leave their own game. Cancel the game instead.', 403);
     if (joining && game.status !== 'scheduled') throw new GameMembershipError('This game has been cancelled.');
     const member = (await client.query('SELECT 1 FROM campus_pickleball.session_members WHERE session_id = $1 AND profile_id = $2', [id, profile.id])).rows.length > 0;
     // Retries do not consume another spot or recheck a member's changed rating.
@@ -163,4 +163,45 @@ export async function listGames(filters, profileId = null, db = getPool()) {
     [filters.skill === 'all' ? null : Number(filters.skill), filters.court || null, filters.date || null, profileId, (filters.page - 1) * 20]);
     return { games: result.rows.slice(0, 20), hasNext: result.rows.length > 20 };
   } catch { throw new Error('Game discovery is temporarily unavailable.'); }
+}
+
+// Keep memberships as the cancellation roster so players can still find the
+// cancellation. Scheduled-only overlap checks automatically release their time.
+export async function cancelGame(subject, id, db = getPool()) {
+  if (!isUUID(id)) throw new GameMembershipError('Game not found.', 404);
+  let client;
+  try {
+    client = await db.connect();
+    await client.query('BEGIN');
+    const profile = (await client.query('SELECT id FROM campus_pickleball.profiles WHERE auth_subject = $1 FOR UPDATE', [subject])).rows[0];
+    if (!profile) throw new GameProfileError('Complete your profile before cancelling a game.');
+    const game = (await client.query('SELECT host_id, starts_at, status FROM campus_pickleball.sessions WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    if (!game) throw new GameMembershipError('Game not found.', 404);
+    if (game.host_id !== profile.id) throw new GameMembershipError('Only the host can cancel this game.', 403);
+    if (game.status !== 'cancelled') {
+      const { now } = (await client.query('SELECT clock_timestamp() AS now')).rows[0];
+      if (game.starts_at <= now) throw new GameMembershipError('This game has started and can no longer be cancelled.');
+      await client.query("UPDATE campus_pickleball.sessions SET status = 'cancelled' WHERE id = $1", [id]);
+    }
+    await client.query('COMMIT');
+    return { status: 'cancelled' };
+  } catch (error) {
+    if (client) { try { await client.query('ROLLBACK'); } catch { /* Preserve sanitized error. */ } }
+    if (error instanceof GameMembershipError || error instanceof GameProfileError) throw error;
+    throw new Error('Games are temporarily unavailable. Please try again.');
+  } finally { client?.release(); }
+}
+
+export async function listMyGames(profileId, page = 1, db = getPool()) {
+  if (!isUUID(profileId) || !Number.isInteger(page) || page < 1 || page > 999999) throw new GameInputError('Choose a valid results page.');
+  try {
+    const result = await db.query(`SELECT s.id, s.starts_at, s.ends_at, s.format, s.status, s.host_id,
+      c.name AS court_name, c.timezone,
+      (SELECT count(*)::int FROM campus_pickleball.session_members m WHERE m.session_id = s.id) AS member_count
+      FROM campus_pickleball.sessions s JOIN campus_pickleball.courts c ON c.id = s.court_id
+      WHERE s.starts_at > statement_timestamp() AND (s.host_id = $1 OR EXISTS (
+        SELECT 1 FROM campus_pickleball.session_members m WHERE m.session_id = s.id AND m.profile_id = $1))
+      ORDER BY s.starts_at, s.id LIMIT 21 OFFSET $2`, [profileId, (page - 1) * 20]);
+    return { games: result.rows.slice(0, 20), hasNext: result.rows.length > 20 };
+  } catch { throw new Error('Your games are temporarily unavailable. Please try again.'); }
 }

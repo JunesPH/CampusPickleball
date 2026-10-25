@@ -11,7 +11,11 @@ for (const method of ['POST', 'DELETE']) {
   assert.match(membership.headers.get('cache-control'), /private, no-store/);
   console.log(`${method} membership: 401, private/no-store`);
 }
-for (const path of ['/games/new']) {
+const cancel = await fetch(`${base}/api/games/11111111-1111-4111-8111-111111111111/cancel`, { method: 'POST', headers: { Origin: base } });
+assert.equal(cancel.status, 401);
+assert.match(cancel.headers.get('cache-control'), /private, no-store/);
+console.log('POST cancellation: 401, private/no-store');
+for (const path of ['/games/new', '/my-games']) {
   const page = await fetch(base + path, { redirect: 'manual' });
   if (page.status === 307) assert.match(page.headers.get('location'), /^\/auth\/login/);
   else {

@@ -4,3 +4,11 @@
   outline: 3px solid #bef264;
   outline-offset: 4px;
 }
+
+body { background: #020617; color: white; }
+main { overflow-wrap: anywhere; }
+fieldset { min-inline-size: 0; }
+input, select, textarea { min-width: 0; max-width: 100%; font-size: 1rem; }
+button, nav a { min-height: 44px; }
+nav a { display: inline-flex; align-items: center; }
+button:not(:disabled), select { cursor: pointer; }
