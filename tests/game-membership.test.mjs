@@ -22,6 +22,19 @@ test('membership API uses session identity, requires authentication/profile and 
   }
 });
 
+test('join and leave accept empty body streams from the server', async () => {
+  for (const method of ['POST', 'DELETE']) {
+    const incoming = new Request(`${base}/api/games/${id}/membership`, {
+      method, headers: { origin: base },
+      body: new ReadableStream({ start(controller) { controller.close(); } }), duplex: 'half',
+    });
+    assert.notEqual(incoming.body, null);
+    const response = await handleMembership(incoming, id, deps());
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { joined: method === 'POST' });
+  }
+});
+
 test('membership API rejects CSRF, submitted identities, unsupported methods and sanitizes errors', async () => {
   const noWrite = () => assert.fail('unsafe write');
   for (const headers of [{ origin: 'https://evil.test' }, { origin: '' }, { 'sec-fetch-site': 'cross-site' }, { 'sec-fetch-site': 'same-site' }]) {

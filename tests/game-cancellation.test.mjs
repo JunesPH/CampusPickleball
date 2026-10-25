@@ -10,6 +10,23 @@ const request = (headers = {}, body, method = 'POST') => new Request(`${base}/ap
 const deps = (overrides = {}) => ({ getSubject: async () => 'trusted', findProfile: async () => ({ id: playerId }), cancelGame: async (subject, gameId) => { assert.equal(subject, 'trusted'); assert.equal(gameId, id); return { status: 'cancelled' }; }, appBaseUrl: base, ...overrides });
 const noWrite = () => assert.fail('Unauthorized write');
 
+test('cancellation accepts an empty server body stream but rejects any submitted bytes', async () => {
+  for (const content of ['', JSON.stringify({ host_id: playerId }), ' ', '\u0000']) {
+    const stream = new ReadableStream({ start(controller) {
+      controller.enqueue(new Uint8Array(0));
+      if (content) controller.enqueue(new TextEncoder().encode(content));
+      controller.close();
+    } });
+    const incoming = new Request(`${base}/api/games/${id}/cancel`, {
+      method: 'POST', headers: { origin: base, 'content-length': '0' }, body: stream, duplex: 'half',
+    });
+    assert.notEqual(incoming.body, null);
+    const response = await handleCancellation(incoming, id, deps(content ? { cancelGame: noWrite } : {}));
+    assert.equal(response.status, content ? 400 : 200);
+    if (!content) assert.deepEqual(await response.json(), { status: 'cancelled' });
+  }
+});
+
 test('cancellation API authenticates, rejects forged identity/CSRF and returns private responses', async () => {
   assert.equal((await handleCancellation(request(), id, deps({ getSubject: async () => null, findProfile: noWrite, cancelGame: noWrite }))).status, 401);
   assert.equal((await handleCancellation(request(), id, deps({ findProfile: async () => null, cancelGame: noWrite }))).status, 403);

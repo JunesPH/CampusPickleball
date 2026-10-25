@@ -1,6 +1,7 @@
 import 'server-only';
 import { GameMembershipError, GameProfileError } from './games.mjs';
 import { profileResponse } from './me-handler.mjs';
+import { hasRequestBody } from './request-body.mjs';
 
 export async function handleCancellation(request, id, { getSubject, findProfile, cancelGame, appBaseUrl }) {
   try {
@@ -10,7 +11,7 @@ export async function handleCancellation(request, id, { getSubject, findProfile,
     if (!await findProfile(subject)) return profileResponse({ error: 'Complete your profile before cancelling a game.' }, 403);
     const site = request.headers.get('sec-fetch-site');
     if (!appBaseUrl || request.headers.get('origin') !== new URL(appBaseUrl).origin || (site && site !== 'same-origin')) return profileResponse({ error: 'Reload this page and try again from this site.' }, 403);
-    if (request.body !== null) return profileResponse({ error: 'Do not submit player information or other fields.' }, 400);
+    if (await hasRequestBody(request)) return profileResponse({ error: 'Do not submit player information or other fields.' }, 400);
     return profileResponse(await cancelGame(subject, id));
   } catch (error) {
     if (error instanceof GameMembershipError) return profileResponse({ error: error.message }, error.status);
