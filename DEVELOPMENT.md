@@ -13,7 +13,8 @@ npm run dev
 ```
 
 Open http://localhost:3000. Changes to `src/app/page.tsx` appear automatically.
-No environment variables or external services are needed.
+The placeholder homepage needs no external services. Database commands require
+local Tiger Cloud configuration; see [database setup](db/README.md).
 
 ## Checks and production preview
 
@@ -40,5 +41,22 @@ Run `npm start` after a successful build to preview the production app locally.
   both ignored by Git.
 
 The original `README.md` and `Campus_Pickleball_Website_Specification.md` are
-preserved. The specification describes future work; authentication, database
-connections, and hosting are outside this scaffold.
+preserved. The database foundation is implemented; authentication, game APIs,
+join/leave behavior, and hosting remain future work.
+
+## Database foundation
+
+Copy `.env.example` to `.env.local` and configure the existing Tiger Cloud service
+locally. Keep credentials out of chat, source files, and `NEXT_PUBLIC_` variables.
+See [db/README.md](db/README.md) for configuration, verified court sources,
+migration safety, scope, and verification results.
+
+```sh
+npm run db:check
+npm run db:migrate
+npm run db:seed
+npm run db:verify
+```
+
+Run migration and seed again to check repeatability. `db:check` and `db:verify`
+use read-only transactions. `npm run test:db` checks connection safety offline.
