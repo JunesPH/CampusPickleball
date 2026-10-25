@@ -1,0 +1,30 @@
+[Unit]
+Description=CampusPickleball production application
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=campus-pickleball
+Group=campus-pickleball
+WorkingDirectory=/srv/campus-pickleball/current
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+# Next loads /etc/campus-pickleball/production.env through the release's
+# .env.production.local symlink. This is Next dotenv syntax, not shell syntax.
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/campus-pickleball
+
+[Install]
+WantedBy=multi-user.target

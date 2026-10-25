@@ -1,0 +1,13 @@
+# Replace app.example.com with the exact canonical domain before installation.
+# Merge this block into an existing Caddyfile; do not overwrite other sites.
+app.example.com {
+    header X-Content-Type-Options nosniff
+    reverse_proxy 127.0.0.1:3000 {
+        # Replace client-provided forwarding headers with the canonical origin.
+        header_up Host app.example.com
+        header_up X-Forwarded-Host app.example.com
+        header_up X-Forwarded-Proto https
+    }
+    # No access log: authentication callback query strings contain credentials.
+    # No proxy cache: account pages and APIs must remain private.
+}

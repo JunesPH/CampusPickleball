@@ -98,11 +98,14 @@ test('cancellation audit against PostgreSQL', { skip: process.env.RUN_GAME_DB_TE
         { origin: 'https://evil.test' }, { origin: '' }, { headers: { 'sec-fetch-site': 'same-site' } },
         { headers: { 'sec-fetch-site': 'cross-site' } },
       ]) assert.equal((await cancel(host, id, options)).status, 403);
-      for (const body of ['', '{}', JSON.stringify({ host_id: host.id }), 'x'.repeat(5000)]) {
-        // An absent body is accepted, but even an explicit empty body is rejected.
+      for (const body of ['{}', JSON.stringify({ host_id: host.id }), 'x'.repeat(5000)]) {
+        // Reject submitted bytes; Next can provide an empty body stream for POST.
         const response = await cancel(host, id, { body }); assert.equal(response.status, 400);
       }
       assert.deepEqual(await raw(id), before); assert.deepEqual(await roster(id), members);
+      assert.equal((await cancel(host, id, { body: '' })).status, 200);
+      assert.equal((await raw(id)).status, 'cancelled');
+      assert.deepEqual(await roster(id), members);
     });
 
     await t.test('a database error after UPDATE rolls back rather than returning false success', async () => {

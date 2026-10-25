@@ -1,0 +1,12 @@
+campuspickleball.us {
+    header X-Content-Type-Options nosniff
+    reverse_proxy 127.0.0.1:3000 {
+        header_up Host campuspickleball.us
+        header_up X-Forwarded-Host campuspickleball.us
+        header_up X-Forwarded-Proto https
+    }
+}
+
+www.campuspickleball.us {
+    redir https://campuspickleball.us{uri} permanent
+}
