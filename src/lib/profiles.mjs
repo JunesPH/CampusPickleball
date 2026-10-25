@@ -1,4 +1,5 @@
 import "server-only";
+import { SKILL_LEVELS } from "./skill-levels.mjs";
 import { getPool } from "./db.mjs";
 
 export class ProfileInputError extends Error {}
@@ -17,7 +18,7 @@ export function validateProfile(input) {
   if (typeof university_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(university_id)) {
     throw new ProfileInputError("Choose a university from the list.");
   }
-  if (typeof skill_level !== "number" || !Number.isInteger(skill_level * 2) || skill_level < 2 || skill_level > 5.5) {
+  if (!SKILL_LEVELS.includes(skill_level)) {
     throw new ProfileInputError("Choose a skill level from 2.0 to 5.5+ in 0.5 steps.");
   }
   return { display_name: display_name.trim(), university_id, skill_level };

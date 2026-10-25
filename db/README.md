@@ -182,3 +182,34 @@ notes above describe its original scope. No applied migrations were edited.
 The live profile concurrency test passed and removed its disposable record;
 read-only verification afterward confirmed the original schema/seeds and zero
 remaining profiles. Real Auth0 login awaits local tenant configuration.
+
+
+## Game creation follow-up
+
+Game creation now uses the existing session and membership tables in one
+transaction; no new migration is needed. Server validation enforces future
+court-local times, the existing numeric skill scale, and a range including the
+host. Authentication/profile gates and automatic host membership are implemented.
+See [DEVELOPMENT.md](../DEVELOPMENT.md#game-creation) for setup and tests.
+Discovery, joining/leaving, and overlap rules remain future work. The user has
+also manually verified sign-up, profile setup, sign-out, sign-in, and saved
+profile persistence; the earlier phase notes above describe historical checks.
+
+
+## Additional game-creation courts
+
+The seed list also includes these user-supplied venues and addresses (October 24,
+2026), both associated with Penn State for discovery and using
+`America/New_York`:
+
+| Venue | Address |
+| --- | --- |
+| PSU Outdoor Pickleball Courts | Curtin Rd, State College, PA 16802 |
+| The Picklr State College | 503 Benner Pike, State College, PA 16801 |
+
+Run `npm run db:seed` to add them to an existing database, then
+`npm run db:verify`. The game creation dropdown reads these database records.
+No schema migration is required. The seed now contains five venues; earlier
+three-venue verification counts above are historical. These additional addresses
+were provided by the user and have not been independently verified. Inclusion
+does not imply free access, availability, or a reservation.

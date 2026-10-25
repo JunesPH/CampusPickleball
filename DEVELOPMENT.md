@@ -2,8 +2,8 @@
 
 The foundation uses the official `create-next-app` starter with Next.js App Router,
 React, TypeScript, Tailwind CSS, ESLint, and npm. Auth0 login and database-backed
-player setup/editing are implemented; Auth0 account configuration is still required
-for a real login test.
+player setup/editing and game creation are implemented. The user has manually
+verified the configured Auth0 flow; see verification below.
 
 ## Local setup
 
@@ -45,7 +45,8 @@ Run `npm start` after a successful build to preview the production app locally.
 
 The original `README.md` and `Campus_Pickleball_Website_Specification.md` are
 preserved. The database foundation and authentication/profile implementation are
-present. Game APIs, join/leave behavior, and hosting remain future work.
+present. Game creation and details are implemented. Discovery and join/leave behavior
+remain future work.
 
 ## Database foundation
 
@@ -127,7 +128,7 @@ pages or API responses. Do not disable TLS verification for Auth0 or PostgreSQL.
   `/auth/profile` and `/auth/access-token` are blocked; the token endpoint is also
   disabled in SDK options.
 - `src/lib/require-profile.ts`: reusable server-page gate requiring sign-in and a
-  complete saved profile. Future game APIs must independently enforce equivalent
+  complete saved profile. Game APIs independently enforce equivalent
   authentication/profile requirements and return API status codes; a page gate
   alone does not authorize an API write.
 - `src/lib/profiles.mjs`: explicit-column, parameterized database operations using
@@ -147,7 +148,7 @@ and retry states. Database failures show a recoverable profile-page error screen
 Missing Auth0 configuration leaves the signed-out homepage available; auth routes
 return 503 and profile APIs remain unauthorized. This is not a fallback identity.
 
-### Verification and remaining external check
+### Authentication verification
 
 Commands:
 
@@ -188,9 +189,10 @@ October 24, 2026 verification:
   single row/ID and preserved creation time, edits persisted, unrelated identity
   lookup returned no profile, invalid university selection failed without changing
   the profile, and the disposable record was removed.
-- Auth0 credentials are absent locally. Real Universal Login, callback exchange,
-  logout, and returning login have **not** been tested against an Auth0 tenant.
-  Complete the account configuration above to finish this check.
+- Subsequent user-reported manual verification (October 24, 2026): sign-up,
+  first-time profile setup, sign-out, sign-in, and saved profile persistence all
+  passed against the configured Auth0 tenant. This is manual user verification,
+  separate from the automated database/API checks above.
 
 Manual acceptance after configuration: sign in with a new account, confirm setup
 appears, save all three fields, refresh and edit, then log out and sign back in.
@@ -206,3 +208,82 @@ Official references checked before implementation:
 [SDK setup and Next.js 16 proxy integration](https://github.com/auth0/nextjs-auth0),
 and the installed Next.js guides for proxy, Route Handlers, redirects,
 server/client boundaries, and environment variables.
+
+
+## Game creation
+
+Run the existing setup workflow before hosting:
+
+```sh
+npm run db:migrate
+npm run db:seed
+npm run db:verify
+```
+
+No new migration is required: the existing `sessions` and `session_members`
+tables, including `002_skill_ratings.sql`, support the complete creation model.
+Applied migrations are unchanged. The current configured database passed read-only
+schema/seed verification, including the numeric skill migration.
+
+Choose **Create game** in the signed-in header, or visit `/games/new`. Pages
+require sign-in and a saved profile; missing profiles go to `/profile/setup`.
+After login the existing Auth0 flow returns through `/profile`, where the header
+provides the creation link. The form chooses an existing court, court-local future
+date/time, duration (30–180 minutes), singles/doubles, and a contiguous minimum to
+maximum accepted skill range using the shared profile rating definitions. The
+range must include the host's current rating. Times are resolved using the stored
+court IANA timezone, independent of the browser/server timezone. Invalid calendar
+dates and skipped/repeated daylight-saving times are rejected with form errors.
+
+`POST /api/games` independently checks the session (401 if absent), saved profile
+(403 if absent), canonical Origin/fetch metadata, JSON content type, a 4 KiB body
+limit, and an allowlist of input fields. Host identity comes from the session,
+never the submitted body. Input errors return 400; database failures return a
+sanitized 503. Responses are private/no-store. The transaction locks the host
+profile and court for consistent reads, inserts the session, inserts its host
+membership, and commits using one database client. Any failure rolls back both.
+
+Success navigates to `/games/[id]`, which displays court/address, start/end with
+timezone, format, accepted skill range, host, and participants. Details require
+a completed profile and use a single database snapshot; malformed or missing IDs
+produce 404. Creation/details failures have a retry screen. The form keeps entries
+on error and disables submission while saving. A game coordinates players and
+does not reserve a physical court.
+
+```sh
+npm run test:games
+npm run test:games:db
+node tests/games-anonymous.smoke.mjs # production server on port 3100
+```
+
+The live test requires configured database/network access. It creates a unique
+`test|campus-game-…` profile, verifies persisted details and automatic host
+participation, injects a real membership FK failure to verify rollback, and
+removes only its own records in `finally`. Interrupted runs may require local
+inspection of those test identities.
+
+October 24, 2026 implementation checks:
+
+- All 20 offline tests passed: seven game tests, eight profile tests, and five
+  database safety tests. Game coverage includes input validation, court timezone
+  conversion/DST, authentication/profile authorization, CSRF, forged identity,
+  JSON/body limits, sanitized errors, transaction commit/rollback, and host
+  participation.
+- Live game integration passed against PostgreSQL with cleanup. Read-only
+  database verification passed with existing migrations and seeds intact.
+- Lint and production build passed. The existing Auth0 `dpopUtils.js` dynamic
+  import warning remains; DPoP is not enabled by this app.
+- Anonymous production HTTP smoke checks passed: `POST /api/games` returns
+  401 with private/no-store headers; both game pages redirect to sign-in. Use
+  `SMOKE_BASE_URL` to check a different local server origin.
+- Browser automation was unavailable (no browser surfaces and the in-app browser
+  could not open). Signed-in game form interaction, visual/mobile layout, and
+  navigation after submission remain unverified in a browser. The user-verified
+  authentication flow above does not establish game-flow verification.
+
+Manual game acceptance: sign in with your saved profile, use **Create game**,
+choose a future court-local time and valid skill range, submit, and confirm the
+details page lists you as both host and participant. Refresh to check persistence.
+Try a past time, reversed range, and range excluding your rating; confirm clear
+errors. Check at phone width. Discovery, joining/leaving, cancellation, schedule
+overlap prevention, and court reservations remain outside this change.

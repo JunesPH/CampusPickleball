@@ -14,7 +14,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
     <PageShell signedIn>
       <p className="mb-4 text-sm font-semibold text-lime-300">Ready for your next rally</p>
       <h1 className="text-3xl font-bold">Your player profile</h1>
-      <p className="mt-4 text-slate-300">Welcome, {profile.display_name}. Keep your details up to date for future games.</p>
+      <p className="mt-4 text-slate-300">Welcome, {profile.display_name}. Keep your details up to date for your games.</p>
       {saved === "1" && <p role="status" className="mt-4 text-lime-300">Your profile is saved. You can edit it below.</p>}
       <ProfileForm profile={{ display_name: profile.display_name, university_id: profile.university_id, skill_level: profile.skill_level }} universities={universities} />
     </PageShell>

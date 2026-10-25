@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { SKILL_LEVELS, skillLabel } from "@/lib/skill-levels.mjs";
 import { useRouter } from "next/navigation";
 
 type Profile = { display_name: string; university_id: string; skill_level: number };
@@ -78,14 +79,7 @@ export default function ProfileForm({ profile, universities }: { profile: Profil
           <select id="skill_level" name="skill_level" required defaultValue={profile?.skill_level ?? ""}
             className={fieldClass} aria-describedby="skill-help">
             <option value="" disabled>Choose your level</option>
-            <option value="2">2.0 — Novice</option>
-            <option value="2.5">2.5</option>
-            <option value="3">3.0 — Intermediate</option>
-            <option value="3.5">3.5</option>
-            <option value="4">4.0 — Advanced</option>
-            <option value="4.5">4.5</option>
-            <option value="5">5.0</option>
-            <option value="5.5">5.5+</option>
+            {SKILL_LEVELS.map((level) => <option key={level} value={level}>{skillLabel(level)}</option>)}
           </select>
           <p id="skill-help" className="mt-2 text-sm text-slate-400">Choose the rating that best matches your play. This is self-reported, not a verified DUPR rating. You can change your level later.</p>
         </div>

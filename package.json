@@ -13,7 +13,9 @@
     "db:verify": "node --conditions=react-server scripts/db.mjs verify",
     "test:db": "node --conditions=react-server --test tests/db.test.mjs",
     "test:profiles": "node --conditions=react-server --test tests/profiles.test.mjs",
-    "test:profiles:db": "RUN_PROFILE_DB_TESTS=1 node --conditions=react-server --test tests/profiles.integration.test.mjs"
+    "test:profiles:db": "RUN_PROFILE_DB_TESTS=1 node --conditions=react-server --test tests/profiles.integration.test.mjs",
+    "test:games": "node --conditions=react-server --test tests/games.test.mjs",
+    "test:games:db": "RUN_GAME_DB_TESTS=1 node --conditions=react-server --test tests/games.integration.test.mjs"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.33.0",
