@@ -6,6 +6,7 @@ export default function PageShell({ children, signedIn = false }: { children: Re
       <header className="mx-auto mb-12 flex max-w-3xl flex-wrap items-center justify-between gap-4">
         <Link href="/" className="font-bold text-lime-300">Campus Pickleball</Link>
         <nav aria-label="Account" className="flex flex-wrap gap-5 text-sm">
+          <Link href="/games">Find games</Link>
           {signedIn ? <><Link href="/games/new">Create game</Link><Link href="/profile">My profile</Link><a href="/auth/logout">Log out</a></> : <a href="/auth/login">Sign in</a>}
         </nav>
       </header>

@@ -191,7 +191,8 @@ transaction; no new migration is needed. Server validation enforces future
 court-local times, the existing numeric skill scale, and a range including the
 host. Authentication/profile gates and automatic host membership are implemented.
 See [DEVELOPMENT.md](../DEVELOPMENT.md#game-creation) for setup and tests.
-Discovery, joining/leaving, and overlap rules remain future work. The user has
+Discovery, joining/leaving, and overlap rules are now implemented as described
+in the membership follow-up below. The user has
 also manually verified sign-up, profile setup, sign-out, sign-in, and saved
 profile persistence; the earlier phase notes above describe historical checks.
 
@@ -213,3 +214,19 @@ No schema migration is required. The seed now contains five venues; earlier
 three-venue verification counts above are historical. These additional addresses
 were provided by the user and have not been independently verified. Inclusion
 does not imply free access, availability, or a reservation.
+
+## Discovery and membership follow-up
+
+Discovery, joining/leaving, and schedule overlap prevention reuse the existing
+tables and indexes; no migration is needed. The membership primary key prevents
+duplicates. Application transactions lock the actor's profile, then the game,
+before checking and changing capacity. Hosting uses the same exclusive profile
+lock and schedule-overlap check. Capacity includes the host: two players for
+singles and four for doubles. Future writers must preserve this lock protocol.
+
+The PostgreSQL integration tests exercise concurrent last-spot and duplicate
+joins, concurrent overlapping commitments, fresh time checks after an actual
+lock wait, and idempotent leaves. Their disposable fixtures are cleaned up.
+Read-only schema/seed verification passed afterward. See
+[DEVELOPMENT.md](../DEVELOPMENT.md#game-discovery-and-membership) for routes,
+filter semantics, setup, tests, and remaining browser-verification limits.

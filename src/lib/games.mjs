@@ -4,6 +4,9 @@ import { SKILL_LEVELS } from './skill-levels.mjs';
 
 export class GameInputError extends Error {}
 export class GameProfileError extends Error {}
+export class GameMembershipError extends Error {
+  constructor(message, status = 409) { super(message); this.status = status; }
+}
 export const isUUID = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 export function validateGame(input) {
@@ -48,13 +51,14 @@ export async function createGame(subject, input, db = getPool()) {
   try {
     client = await db.connect();
     await client.query('BEGIN');
-    const profile = (await client.query('SELECT id, skill_level FROM campus_pickleball.profiles WHERE auth_subject = $1 FOR SHARE', [subject])).rows[0];
+    const profile = (await client.query('SELECT id, skill_level FROM campus_pickleball.profiles WHERE auth_subject = $1 FOR UPDATE', [subject])).rows[0];
     if (!profile) throw new GameProfileError('Complete your profile before creating a game.');
     if (profile.skill_level < input.skill_min || profile.skill_level > input.skill_max) throw new GameInputError('The accepted skill range must include your own skill level.');
     const court = (await client.query('SELECT id, timezone FROM campus_pickleball.courts WHERE id = $1 FOR SHARE', [input.court_id])).rows[0];
     if (!court) throw new GameInputError('Choose an existing court.');
     const starts = courtTimeToDate(input.local_time, court.timezone);
     const ends = new Date(starts.getTime() + input.duration_minutes * 60000);
+    if (await hasOverlap(client, profile.id, starts, ends)) throw new GameInputError('You already have a game during this time.');
     const game = (await client.query(`INSERT INTO campus_pickleball.sessions (host_id, court_id, starts_at, ends_at, format, skill_min, skill_max)
       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [profile.id, court.id, starts, ends, input.format, input.skill_min, input.skill_max])).rows[0];
     await client.query('INSERT INTO campus_pickleball.session_members (session_id, profile_id) VALUES ($1, $2)', [game.id, profile.id]);
@@ -70,7 +74,7 @@ export async function createGame(subject, input, db = getPool()) {
 export async function findGame(id, db = getPool()) {
   if (!isUUID(id)) return null;
   try {
-    const game = (await db.query(`SELECT s.id, s.starts_at, s.ends_at, s.format, s.skill_min, s.skill_max, s.host_id,
+    const game = (await db.query(`SELECT s.id, s.starts_at, s.ends_at, s.format, s.skill_min, s.skill_max, s.host_id, s.status,
       c.name AS court_name, c.address, c.timezone, p.display_name AS host_name,
       COALESCE((SELECT json_agg(json_build_object('id', m.profile_id, 'display_name', mp.display_name) ORDER BY m.joined_at, m.profile_id)
         FROM campus_pickleball.session_members m JOIN campus_pickleball.profiles mp ON mp.id = m.profile_id WHERE m.session_id = s.id), '[]'::json) AS participants
@@ -78,4 +82,85 @@ export async function findGame(id, db = getPool()) {
       JOIN campus_pickleball.profiles p ON p.id = s.host_id WHERE s.id = $1`, [id])).rows[0];
     return game ?? null;
   } catch { throw new Error('Game details are temporarily unavailable.'); }
+}
+
+// Profile locks serialize one player's commitments; session locks serialize
+// capacity changes. Every create/join/leave uses that same lock order.
+async function hasOverlap(client, profileId, starts, ends) {
+  return (await client.query(`SELECT 1 FROM campus_pickleball.session_members m
+    JOIN campus_pickleball.sessions s ON s.id = m.session_id
+    WHERE m.profile_id = $1 AND s.status = 'scheduled'
+      AND s.starts_at < $3 AND s.ends_at > $2 LIMIT 1`, [profileId, starts, ends])).rows.length > 0;
+}
+
+export async function changeMembership(subject, id, joining, db = getPool()) {
+  if (!isUUID(id)) throw new GameMembershipError('Game not found.', 404);
+  let client;
+  try {
+    client = await db.connect();
+    await client.query('BEGIN');
+    const profile = (await client.query('SELECT id, skill_level FROM campus_pickleball.profiles WHERE auth_subject = $1 FOR UPDATE', [subject])).rows[0];
+    if (!profile) throw new GameProfileError('Complete your profile before joining or leaving a game.');
+    const game = (await client.query(`SELECT id, host_id, starts_at, ends_at, status, format, skill_min, skill_max
+      FROM campus_pickleball.sessions WHERE id = $1 FOR UPDATE`, [id])).rows[0];
+    if (!game) throw new GameMembershipError('Game not found.', 404);
+    // Read the database clock AFTER acquiring both locks: a request may have
+    // waited past the start time. Transaction-start now() would be stale.
+    const { now } = (await client.query('SELECT clock_timestamp() AS now')).rows[0];
+    if (game.starts_at <= now) throw new GameMembershipError('This game has started. Joining and leaving are closed.');
+    if (!joining && game.host_id === profile.id) throw new GameMembershipError('Hosts cannot leave their own game. Host cancellation is not available yet.', 403);
+    if (joining && game.status !== 'scheduled') throw new GameMembershipError('This game has been cancelled.');
+    const member = (await client.query('SELECT 1 FROM campus_pickleball.session_members WHERE session_id = $1 AND profile_id = $2', [id, profile.id])).rows.length > 0;
+    // Retries do not consume another spot or recheck a member's changed rating.
+    if (joining && !member) {
+      if (profile.skill_level < game.skill_min || profile.skill_level > game.skill_max) throw new GameMembershipError('Your skill level is outside this game’s accepted range.', 403);
+      const { count } = (await client.query('SELECT count(*)::int AS count FROM campus_pickleball.session_members WHERE session_id = $1', [id])).rows[0];
+      if (count >= (game.format === 'singles' ? 2 : 4)) throw new GameMembershipError('This game is full. Choose another game or try again if a spot opens.');
+      if (await hasOverlap(client, profile.id, game.starts_at, game.ends_at)) throw new GameMembershipError('You already have a game during this time.');
+      await client.query('INSERT INTO campus_pickleball.session_members (session_id, profile_id) VALUES ($1, $2)', [id, profile.id]);
+    } else if (!joining && member) {
+      await client.query('DELETE FROM campus_pickleball.session_members WHERE session_id = $1 AND profile_id = $2', [id, profile.id]);
+    }
+    await client.query('COMMIT');
+    return { joined: joining };
+  } catch (error) {
+    if (client) { try { await client.query('ROLLBACK'); } catch { /* Preserve sanitized error. */ } }
+    if (error instanceof GameMembershipError || error instanceof GameProfileError) throw error;
+    throw new Error('Games are temporarily unavailable. Please try again.');
+  } finally { client?.release(); }
+}
+
+export function parseGameFilters(input, defaultSkill = 'all') {
+  const read = (key, fallback = '') => {
+    const value = input[key];
+    if (value === undefined) return fallback;
+    if (typeof value !== 'string') throw new GameInputError('Choose one value for each filter.');
+    return value;
+  };
+  const skill = read('skill', defaultSkill) || 'all';
+  const court = read('court');
+  const date = read('date');
+  const page = read('page', '1');
+  if (skill !== 'all' && !SKILL_LEVELS.includes(Number(skill))) throw new GameInputError('Choose a skill level from the list.');
+  if (court && !isUUID(court)) throw new GameInputError('Choose a court from the list.');
+  if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(`${date}T12:00:00Z`)) || new Date(`${date}T12:00:00Z`).toISOString().slice(0, 10) !== date)) throw new GameInputError('Choose a valid calendar date.');
+  if (!/^[1-9]\d{0,5}$/.test(page)) throw new GameInputError('Choose a valid results page.');
+  return { skill, court, date, page: Number(page) };
+}
+
+export async function listGames(filters, profileId = null, db = getPool()) {
+  try {
+    const result = await db.query(`SELECT s.id, s.starts_at, s.ends_at, s.format, s.skill_min, s.skill_max, s.host_id,
+      c.name AS court_name, c.address, c.timezone,
+      (SELECT count(*)::int FROM campus_pickleball.session_members m WHERE m.session_id = s.id) AS member_count,
+      EXISTS (SELECT 1 FROM campus_pickleball.session_members m WHERE m.session_id = s.id AND m.profile_id = $4::uuid) AS joined
+      FROM campus_pickleball.sessions s JOIN campus_pickleball.courts c ON c.id = s.court_id
+      WHERE s.status = 'scheduled' AND s.starts_at > statement_timestamp()
+        AND ($1::double precision IS NULL OR (s.skill_min <= $1 AND s.skill_max >= $1))
+        AND ($2::uuid IS NULL OR s.court_id = $2)
+        AND ($3::date IS NULL OR (s.starts_at AT TIME ZONE c.timezone)::date = $3)
+      ORDER BY s.starts_at, s.id LIMIT 21 OFFSET $5`,
+    [filters.skill === 'all' ? null : Number(filters.skill), filters.court || null, filters.date || null, profileId, (filters.page - 1) * 20]);
+    return { games: result.rows.slice(0, 20), hasNext: result.rows.length > 20 };
+  } catch { throw new Error('Game discovery is temporarily unavailable.'); }
 }

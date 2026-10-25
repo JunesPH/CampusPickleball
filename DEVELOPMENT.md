@@ -240,12 +240,12 @@ dates and skipped/repeated daylight-saving times are rejected with form errors.
 limit, and an allowlist of input fields. Host identity comes from the session,
 never the submitted body. Input errors return 400; database failures return a
 sanitized 503. Responses are private/no-store. The transaction locks the host
-profile and court for consistent reads, inserts the session, inserts its host
+profile exclusively and court for consistent reads, checks schedule overlap, inserts the session, inserts its host
 membership, and commits using one database client. Any failure rolls back both.
 
 Success navigates to `/games/[id]`, which displays court/address, start/end with
-timezone, format, accepted skill range, host, and participants. Details require
-a completed profile and use a single database snapshot; malformed or missing IDs
+timezone, format, accepted skill range, host, and participants. Details are now
+publicly browsable and use a single database snapshot; malformed or missing IDs
 produce 404. Creation/details failures have a retry screen. The form keeps entries
 on error and disables submission while saving. A game coordinates players and
 does not reserve a physical court.
@@ -285,5 +285,88 @@ Manual game acceptance: sign in with your saved profile, use **Create game**,
 choose a future court-local time and valid skill range, submit, and confirm the
 details page lists you as both host and participant. Refresh to check persistence.
 Try a past time, reversed range, and range excluding your rating; confirm clear
-errors. Check at phone width. Discovery, joining/leaving, cancellation, schedule
-overlap prevention, and court reservations remain outside this change.
+errors. Check at phone width. The creation-phase checks above are historical;
+discovery, joining/leaving, and schedule overlap prevention are covered below.
+
+## Game discovery and membership
+
+Use **Find games** or `/games`. Discovery and detail pages are public; membership
+writes still require Auth0 sign-in and a completed profile. Upcoming scheduled
+games are ordered by start time and ID, with 20 results per page. Cards show the
+court/address, court-local time and IANA timezone, format, accepted rating range,
+remaining spots, and the current player's membership or host status.
+
+The GET filter form stores `skill`, `court`, and `date` in the URL; pagination
+adds `page` and retains the filters. With no explicit skill filter, a saved
+profile defaults to its current rating. `skill=all` explicitly shows every
+rating, including after **Clear filters**. A selected skill must fall within the
+game's accepted range. A date is matched to the start date in **each court's
+local timezone**, not the browser or server timezone. Invalid/duplicate filter
+values produce an actionable message. Empty results offer broader filters or
+hosting. Loading and retry states are included.
+
+On a detail page, eligible players can join or leave. Successful writes refresh
+the roster, membership controls, and available spots from the server. Pending
+requests disable the controls; failures show errors without pretending that a
+write succeeded. Signed-out players get a sign-in link, and incomplete profiles
+get a setup link. The current Auth0 callback still returns through `/profile`;
+use **Find games** afterward. Host cancellation has no existing flow, so hosts
+see an explanation and cannot leave. Cancellation and My Games remain separate
+future features. Cancelled games cannot be joined; participants may leave a
+cancelled game before its start. Joining and leaving close at the start.
+
+`POST /api/games/:id/membership` joins, and `DELETE` on the same path leaves.
+Both take **no request body**. Identity is resolved from the authenticated
+session. They retain canonical-Origin and same-origin fetch-metadata checks,
+return private/no-store responses, and use 401 (signed out), 403 (profile or
+eligibility/host restriction), 404 (missing game), 409 (full, closed or overlapping
+commitment), and sanitized 503 (service failure) responses.
+
+Every create/join/leave transaction locks the acting profile `FOR UPDATE`
+before acquiring any existing session's `FOR UPDATE` lock. The profile lock
+serializes one player's commitments, and the session lock serializes competing
+capacity changes. After waiting for locks, joining/leaving checks a fresh
+`clock_timestamp()` from PostgreSQL, avoiding a stale transaction-start time.
+Joining checks current skill, status, existing membership, capacity (2 singles,
+4 doubles, including the host), and overlapping scheduled commitments. Adjacent
+time intervals are allowed. Hosting now shares the profile lock and overlap
+check. All checks and the membership write commit or roll back together.
+
+Existing members' repeated joins return success without inserting another row,
+including after a rating change or when the roster is full. Repeated leaves do
+not remove anyone else's membership. The existing composite membership primary
+key also prevents duplicate rows at the database level. Capacity and overlap
+are enforced by the transactional locking protocol; future membership writers
+must preserve it. No new migration, dependency, or environment variable is
+required. Existing database migrations/seeds must already be installed.
+
+Verification for this implementation:
+
+- All 27 offline tests passed (14 game, 8 profile, 5 database safety).
+- All 8 PostgreSQL checks passed, including real competing singles/doubles
+  joins, simultaneous duplicate joins, overlapping commitments, a confirmed
+  database lock wait followed by a started-game rejection, leave/retry behavior,
+  eligibility/status/host restrictions, court-local filtering, and rollback.
+  The fixtures use unique `test|membership-…` / `test|campus-game-…` identities
+  and delete their own games, memberships, and profiles in `finally`.
+- Lint, TypeScript, and the production build passed. The existing Auth0
+  `dpopUtils.js` dynamic-dependency warning remains.
+- Production HTTP smoke checks passed for anonymous write protection, public
+  discovery and filters, invalid-filter messages, sign-in gating on creation,
+  and missing details. Tests account for Next.js streaming redirects/404s.
+- Read-only database verification passed with the existing schema and seeds.
+- No browser surfaces are available, so signed-in clicks, keyboard interaction,
+  and phone-width visual inspection remain unverified in a browser.
+
+Run `npm run test:games`, `npm run test:games:db`, `npm run test:profiles`,
+`npm run test:db`, and `npm run build`. For HTTP smoke checks, start a production
+server on port 3100 and run `node tests/games-anonymous.smoke.mjs`; override
+`SMOKE_BASE_URL` for a different origin. Database checks require the configured
+database connection and network access.
+
+Manual acceptance: host a future singles game, open it from **Find games** on
+another eligible account, join, refresh both accounts to confirm the same roster,
+then leave and confirm the spot reopens. Try another account while full, an
+ineligible rating, overlapping game times, and a started/cancelled game. Verify
+the host cannot leave, filter URLs survive refresh, and **Clear filters** resets
+the visible controls. Check the flow at phone width and with keyboard navigation.

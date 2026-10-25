@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SKILL_LEVELS, skillLabel } from '@/lib/skill-levels.mjs';
+import CourtDateTimePicker from './court-date-time-picker';
 
 type Court = { id: string; name: string; address: string; timezone: string };
 export default function GameForm({ courts, skillLevel }: { courts: Court[]; skillLevel: number }) {
@@ -11,11 +12,18 @@ export default function GameForm({ courts, skillLevel }: { courts: Court[]; skil
   const [error, setError] = useState('');
   const [status, setStatus] = useState(0);
   const [courtId, setCourtId] = useState(courts[0]?.id ?? '');
+  const [localTime, setLocalTime] = useState('');
   const court = courts.find((value) => value.id === courtId);
   const fieldClass = 'mt-2 w-full rounded-xl border border-slate-600 bg-slate-950 px-4 py-3 text-white';
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending.current) return;
+    if (!localTime) {
+      setError('Choose a date and time at the court.');
+      setStatus(0);
+      event.currentTarget.querySelector<HTMLButtonElement>('#local_time')?.focus();
+      return;
+    }
     const fields = new FormData(event.currentTarget);
     pending.current = true;
     setSaving(true); setError(''); setStatus(0);
@@ -34,7 +42,7 @@ export default function GameForm({ courts, skillLevel }: { courts: Court[]; skil
     <fieldset disabled={saving} className="space-y-6 disabled:opacity-70">
       <legend className="sr-only">Game details</legend>
       <div><label htmlFor="court_id">Court</label><select id="court_id" name="court_id" required value={courtId} onChange={(event) => setCourtId(event.target.value)} className={fieldClass}>{courts.map((value) => <option key={value.id} value={value.id}>{value.name} — {value.address}</option>)}</select></div>
-      <div><label htmlFor="local_time">Date and time at the court</label><input id="local_time" name="local_time" type="datetime-local" required className={fieldClass} aria-describedby="time-help"/><p id="time-help" className="mt-2 text-sm text-slate-400">Timezone: {court?.timezone ?? 'Choose a court'}. Choose a future time. Repeated or skipped daylight-saving times cannot be selected.</p></div>
+      <div><label htmlFor="local_time">Date and time at the court</label><CourtDateTimePicker value={localTime} onChange={setLocalTime} timezone={court?.timezone} /><p id="time-help" className="mt-2 text-sm text-slate-400">Timezone: {court?.timezone ?? 'Choose a court'}. Choose a future time. Repeated or skipped daylight-saving times cannot be selected.</p></div>
       <div><label htmlFor="duration_minutes">Duration</label><select id="duration_minutes" name="duration_minutes" defaultValue="60" className={fieldClass}>{[30, 60, 90, 120, 150, 180].map((minutes) => <option key={minutes} value={minutes}>{minutes} minutes</option>)}</select></div>
       <div><label htmlFor="format">Format</label><select id="format" name="format" className={fieldClass}><option value="singles">Singles · 2 players</option><option value="doubles">Doubles · 4 players</option></select></div>
       <p className="text-sm text-slate-400">Accepted levels must include your rating ({skillLabel(skillLevel)}). All ratings are self-reported.</p>

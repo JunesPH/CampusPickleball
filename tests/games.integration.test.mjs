@@ -28,7 +28,7 @@ test('PostgreSQL persists game and host together and rolls back a failed members
       const client = await pool.connect();
       return { release: () => client.release(), query: (sql, values) => client.query(sql, sql.startsWith('INSERT INTO campus_pickleball.session_members') ? [values[0], randomUUID()] : values) };
     } };
-    await assert.rejects(createGame(subject, input, failingPool), /temporarily unavailable/);
+    await assert.rejects(createGame(subject, { ...input, local_time: '2099-07-02T12:30' }, failingPool), /temporarily unavailable/);
     const count = await pool.query('SELECT count(*)::int AS n FROM campus_pickleball.sessions WHERE host_id = $1', [profile.id]);
     assert.equal(count.rows[0].n, 1);
   } catch { throw new Error('Game integration check failed; check connectivity/schema and assertions locally.'); }
