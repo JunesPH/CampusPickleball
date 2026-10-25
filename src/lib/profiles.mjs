@@ -17,8 +17,8 @@ export function validateProfile(input) {
   if (typeof university_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(university_id)) {
     throw new ProfileInputError("Choose a university from the list.");
   }
-  if (!Number.isInteger(skill_level) || skill_level < 1 || skill_level > 3) {
-    throw new ProfileInputError("Choose Beginner, Intermediate, or Advanced.");
+  if (typeof skill_level !== "number" || !Number.isInteger(skill_level * 2) || skill_level < 2 || skill_level > 5.5) {
+    throw new ProfileInputError("Choose a skill level from 2.0 to 5.5+ in 0.5 steps.");
   }
   return { display_name: display_name.trim(), university_id, skill_level };
 }

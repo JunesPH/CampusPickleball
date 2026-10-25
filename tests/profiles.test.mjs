@@ -22,12 +22,12 @@ function dependencies(overrides = {}) {
   };
 }
 
-test("profile validation trims names and accepts only the three integer levels", () => {
+test("profile validation trims names and accepts only half-point ratings from 2.0 through 5.5", () => {
   assert.equal(validateProfile(valid).display_name, "Rally Player");
-  for (const skill_level of [1, 2, 3]) assert.equal(validateProfile({ ...valid, skill_level }).skill_level, skill_level);
+  for (const skill_level of [2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5]) assert.equal(validateProfile({ ...valid, skill_level }).skill_level, skill_level);
   for (const input of [null, [], {}, { ...valid, display_name: "  " }, { ...valid, display_name: "a".repeat(81) },
     { ...valid, display_name: 3 }, { ...valid, university_id: "not-a-uuid" },
-    ...[0, 4, 1.5, "2", null, true].map((skill_level) => ({ ...valid, skill_level })),
+    ...[0, 1, 1.5, 2.25, 3.1, 5.75, 6, NaN, Infinity, -Infinity, "2", null, true].map((skill_level) => ({ ...valid, skill_level })),
     { ...valid, auth_subject: "auth0|victim" }, { ...valid, id: "victim" }]) {
     assert.throws(() => validateProfile(input), ProfileInputError);
   }
@@ -47,7 +47,7 @@ test("GET distinguishes missing profiles and reads only the session subject", as
   const response = await handleMe(new Request(`${base}/api/me?id=victim`), dependencies({
     findProfile: async (subject) => {
       assert.equal(subject, "auth0|trusted-session");
-      return { id: "own-profile", display_name: "Player", skill_level: 1 };
+      return { id: "own-profile", display_name: "Player", skill_level: 2.5 };
     },
   }));
   assert.equal(response.status, 200);

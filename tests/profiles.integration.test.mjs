@@ -16,9 +16,10 @@ test("real PostgreSQL: racing saves, identity isolation, persistence, timestamps
   try {
     const universities = await listUniversities();
     assert.ok(universities.length, "Seed a university before this test.");
-    const input = { display_name: "Disposable profile test", university_id: universities[0].id, skill_level: 1 };
+    const input = { display_name: "Disposable profile test", university_id: universities[0].id, skill_level: 2 };
     attemptedWrite = true;
-    const results = await Promise.all(Array.from({ length: 6 }, (_, index) => saveProfile(subject, { ...input, skill_level: index % 3 + 1 })));
+    const results = await Promise.all(Array.from({ length: 8 }, (_, index) => saveProfile(subject, { ...input, skill_level: 2 + index * 0.5 })));
+    assert.deepEqual(results.map((row) => row.skill_level), [2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5]);
     assert.equal(new Set(results.map((row) => row.id)).size, 1);
     assert.equal(new Set(results.map((row) => row.created_at.toISOString())).size, 1);
     const count = await pool.query("SELECT count(*)::int AS count FROM campus_pickleball.profiles WHERE auth_subject = $1", [subject]);
@@ -26,11 +27,12 @@ test("real PostgreSQL: racing saves, identity isolation, persistence, timestamps
     const saved = await findProfile(subject);
     assert.ok(saved);
     assert.ok(!Object.hasOwn(saved, "auth_subject"));
-    const edited = await saveProfile(subject, { ...input, display_name: "  Updated test  ", skill_level: 3 });
+    const edited = await saveProfile(subject, { ...input, display_name: "  Updated test  ", skill_level: 5.5 });
     assert.equal(edited.id, saved.id);
     assert.equal(edited.created_at.toISOString(), saved.created_at.toISOString());
     assert.ok(edited.updated_at >= saved.updated_at);
     assert.equal((await findProfile(subject)).display_name, "Updated test");
+    assert.equal((await findProfile(subject)).skill_level, 5.5);
     assert.equal(await findProfile(`test|unrelated-${randomUUID()}`), null);
     await assert.rejects(saveProfile(subject, { ...input, university_id: randomUUID() }), ProfileInputError);
     assert.equal((await findProfile(subject)).display_name, "Updated test");

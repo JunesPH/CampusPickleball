@@ -78,9 +78,16 @@ export default function ProfileForm({ profile, universities }: { profile: Profil
           <select id="skill_level" name="skill_level" required defaultValue={profile?.skill_level ?? ""}
             className={fieldClass} aria-describedby="skill-help">
             <option value="" disabled>Choose your level</option>
-            <option value="1">Beginner</option><option value="2">Intermediate</option><option value="3">Advanced</option>
+            <option value="2">2.0 — Novice</option>
+            <option value="2.5">2.5</option>
+            <option value="3">3.0 — Intermediate</option>
+            <option value="3.5">3.5</option>
+            <option value="4">4.0 — Advanced</option>
+            <option value="4.5">4.5</option>
+            <option value="5">5.0</option>
+            <option value="5.5">5.5+</option>
           </select>
-          <p id="skill-help" className="mt-2 text-sm text-slate-400">These are self-reported app labels, not official ratings. You can change your level later.</p>
+          <p id="skill-help" className="mt-2 text-sm text-slate-400">Choose the rating that best matches your play. This is self-reported, not a verified DUPR rating. You can change your level later.</p>
         </div>
       </fieldset>
       {error && <div role="alert" className="rounded-xl border border-red-400/50 p-4 text-red-200">

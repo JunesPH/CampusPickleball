@@ -69,8 +69,10 @@ use read-only transactions. `npm run test:db` checks connection safety offline.
 The app uses `@auth0/nextjs-auth0` v4.33.0 with Universal Login and Next.js
 16.4.3's `src/proxy.ts` convention. The installed SDK's peer range includes this
 Next.js and React version. Auth0 manages identity and credentials; Tiger Cloud
-stores display name, university, and self-reported skill level. No schema changes
-were needed.
+stores display name, university, and self-reported skill level. Migration
+`002_skill_ratings.sql` converts the original categories to numeric ratings; run
+`npm run db:migrate` before using the updated profile form. Existing levels map
+to 2.0 (Novice), 3.0 (Intermediate), and 4.0 (Advanced), including session ranges.
 
 ### Finish local Auth0 configuration
 
@@ -131,9 +133,10 @@ pages or API responses. Do not disable TLS verification for Auth0 or PostgreSQL.
 - `src/lib/profiles.mjs`: explicit-column, parameterized database operations using
   the existing server-only pool. Universities come from the seeded database.
   Saves trim names to 1–80 characters, accept an existing university UUID and an
-  integer skill level 1–3, and atomically upsert by unique `auth_subject`.
+  numeric skill level from 2.0 to 5.5 in 0.5 steps, and atomically upsert by unique `auth_subject`.
   Creation time is preserved and update time advances on edits. The skill labels
-  are Beginner=1, Intermediate=2, Advanced=3; affiliation is self-declared.
+  are 2.0 — Novice, 3.0 — Intermediate, and 4.0 — Advanced; other choices
+  have no labels, and 5.5 is displayed as 5.5+. Affiliation is self-declared.
 - `src/lib/me-handler.mjs`: session-derived authorization, exact canonical Origin
   validation and same-origin fetch metadata checks for PUT, JSON/body size
   validation (4 KiB), sanitized 503 failures, and private/no-store responses.

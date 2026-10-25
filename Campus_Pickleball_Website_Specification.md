@@ -14,7 +14,7 @@ Players may want to play without messaging friends individually or arriving at e
 
 ### Core product decision
 
-Match people through open play sessions. A host posts a court, time, format, and accepted skill levels; other players claim available spots. Skill is an editable profile choice: Beginner, Intermediate, or Advanced. These are app labels, not official ratings. DUPR integration, competitive rankings, and automatic skill calculation are excluded.
+Match people through open play sessions. A host posts a court, time, format, and accepted skill levels; other players claim available spots. Skill is an editable, self-reported profile choice: 2.0 (Novice), 2.5, 3.0 (Intermediate), 3.5, 4.0 (Advanced), 4.5, 5.0, or 5.5+. These are not verified DUPR ratings. DUPR integration, competitive rankings, and automatic skill calculation are excluded.
 
 | Priority | Included scope |
 | --- | --- |
@@ -43,8 +43,8 @@ Find Games → Sign In → Complete Profile → Filter for a suitable game → O
 
 ### Skill matching specification
 
-- Beginner: learning rules and basic control. Intermediate: can sustain rallies and play regular games. Advanced: comfortable with placement, pace, and strategy. Show these descriptions during setup.
-- The host selects one or more adjacent levels, such as Beginner through Intermediate. Default discovery uses the player’s level; players may browse other levels, but joining requires a level within the session range.
+- Label only 2.0 as Novice, 3.0 as Intermediate, and 4.0 as Advanced. Display the other ratings without labels; store the 5.5+ choice as 5.5.
+- The host selects one or more adjacent levels, such as 2.0 through 3.0. Default discovery uses the player’s level; players may browse other levels, but joining requires a level within the session range.
 - Use simple SQL filters and chronological sorting. No AI model or recommendation service is required. Profile changes affect future joins; existing memberships remain valid.
 
 ### Session rules
@@ -90,7 +90,7 @@ Use UUID primary keys, foreign keys, and parameterized SQL through the Node Post
 | Entity | Key fields and relationships |
 | --- | --- |
 | universities | id, name, region. One university has many courts and profiles. |
-| profiles | id, auth_subject UNIQUE, display_name, university_id FK, skill_level CHECK 1–3, created_at, updated_at. Never store passwords. |
+| profiles | id, auth_subject UNIQUE, display_name, university_id FK, skill_level CHECK IN (2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5), created_at, updated_at. Never store passwords. |
 | courts | id, university_id FK, name, address, timezone. Seed a short curated list; no court management screen. |
 | sessions | id, host_id FK, court_id FK, starts_at, ends_at, format, skill_min, skill_max, status scheduled or cancelled, notes, created_at. |
 | session_members | session_id FK, profile_id FK, joined_at; composite primary key on session_id and profile_id. Host is also a member. |
@@ -157,7 +157,7 @@ Sponsor capabilities were checked against official documentation on October 24, 
 ### Acceptance criteria
 
 - A new player signs in, saves a self-reported level, and returns to the same profile after logout and login.
-- Host creates an Intermediate doubles session; one spot is occupied and three remain. A second eligible account joins and sees the same saved roster after refresh.
+- Host creates a 3.0 doubles session; one spot is occupied and three remain. A second eligible account joins and sees the same saved roster after refresh.
 - Joining twice consumes one spot. Two concurrent requests for the final spot produce exactly one new member; the other receives a clear full-game response.
 - A player outside the accepted range, an overlapping participant, or a user joining after start is rejected. A non-host cannot cancel. Leaving reopens a spot.
 - Host cancellation disables joining and appears in My Games. An unauthenticated direct API write fails. Main actions work on a phone sized screen.
