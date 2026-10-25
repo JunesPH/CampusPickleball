@@ -11,9 +11,12 @@
     "db:migrate": "node --conditions=react-server scripts/db.mjs migrate",
     "db:seed": "node --conditions=react-server scripts/db.mjs seed",
     "db:verify": "node --conditions=react-server scripts/db.mjs verify",
-    "test:db": "node --conditions=react-server --test tests/db.test.mjs"
+    "test:db": "node --conditions=react-server --test tests/db.test.mjs",
+    "test:profiles": "node --conditions=react-server --test tests/profiles.test.mjs",
+    "test:profiles:db": "RUN_PROFILE_DB_TESTS=1 node --conditions=react-server --test tests/profiles.integration.test.mjs"
   },
   "dependencies": {
+    "@auth0/nextjs-auth0": "^4.33.0",
     "@next/env": "^16.4.3",
     "next": "16.4.3",
     "pg": "^8.23.1",

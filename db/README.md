@@ -172,3 +172,13 @@ October 24, 2026:
 The database foundation is live and verified. Future authentication and game
 behavior remain outside this phase. Only sanitized verification summaries are
 recorded here; credentials and private service identifiers are omitted.
+
+## Authentication/profile implementation follow-up
+
+The subsequent authentication phase now uses this foundation for profile reads
+and atomic upserts. See [DEVELOPMENT.md](../DEVELOPMENT.md#auth0-login-and-player-profiles)
+for Auth0 setup, routes, validation, and verification. The database-only phase
+notes above describe its original scope. No applied migrations were edited.
+The live profile concurrency test passed and removed its disposable record;
+read-only verification afterward confirmed the original schema/seeds and zero
+remaining profiles. Real Auth0 login awaits local tenant configuration.

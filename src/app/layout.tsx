@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Campus Pickleball",
   description:
-    "A place for university pickleball players to connect and find their next game. Coming soon.",
+    "Connect with university pickleball players and set up your player profile.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
